@@ -46,7 +46,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { show } = useAlert();
-  const adminEmailEnv = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
+  const adminEmailEnvRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
+  const adminEmails = adminEmailEnvRaw.split(/[\s,;]+/).filter(Boolean);
 
   useEffect(() => {
     const check = async () => {
@@ -54,7 +55,7 @@ export default function AdminPage() {
         const supabase = getSupabaseBrowserClient();
         const { data } = await supabase.auth.getUser();
         const user = data?.user;
-        const ok = !!user && (!adminEmailEnv || (user.email || "").toLowerCase() === adminEmailEnv);
+        const ok = !!user && (adminEmails.length === 0 || adminEmails.includes((user.email || "").toLowerCase()));
         setAuthed(ok);
       } catch {
         setAuthed(false);
@@ -76,7 +77,7 @@ export default function AdminPage() {
         return;
       }
       const user = data.user;
-      const ok = !!user && (!adminEmailEnv || (user.email || "").toLowerCase() === adminEmailEnv);
+      const ok = !!user && (adminEmails.length === 0 || adminEmails.includes((user.email || "").toLowerCase()));
       if (!ok) {
         setError("This account is not authorized for admin.");
         await supabase.auth.signOut();

@@ -14,8 +14,9 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
         const supabase = getSupabaseBrowserClient();
         const { data } = await supabase.auth.getUser();
         const user = data?.user;
-        const adminEmailEnv = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
-        const ok = !!user && (!adminEmailEnv || (user.email || "").toLowerCase() === adminEmailEnv);
+        const listRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
+        const allowed = listRaw.split(/[,\s;]+/).filter(Boolean);
+        const ok = !!user && (allowed.length === 0 || allowed.includes((user.email || "").toLowerCase()));
         if (!ok) {
           router.replace("/admin");
           return;
@@ -36,5 +37,4 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
   }
   return <>{children}</>;
 }
-
 

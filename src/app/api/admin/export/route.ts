@@ -45,7 +45,8 @@ export async function POST(req: Request) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const adminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+    const adminListRaw = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+    const admins = adminListRaw.split(/[\s,;]+/).filter(Boolean);
     if (!url || !anon || !service) {
       return NextResponse.json({ error: "Supabase env not configured" }, { status: 500 });
     }
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
     }
     const me = await who.json().catch(() => null as any);
     const email = (me?.email || "").toLowerCase();
-    if (!email || (adminEmail && email !== adminEmail)) {
+    if (!email || (admins.length > 0 && !admins.includes(email))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -121,4 +122,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
 }
-
