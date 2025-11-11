@@ -113,7 +113,7 @@ export default function Page() {
           if (!res.error) break;
         }
 
-        // Fetch profile to check if new/incomplete
+        // Fetch profile (ensure exists), then redirect to requested page or home
         let { data: row } = await supabase
           .from("Profile-Table")
           .select("*")
@@ -129,7 +129,8 @@ export default function Page() {
         }
         const displayName = (row?.name || row?.full_name || fullName || user.email || email || "").toString();
         show({ title: "Welcome", description: `${displayName}`, variant: "success" });
-        router.replace("/profile/edit/");
+        const next = nextParam || "/";
+        router.replace(next);
         return;
       }
     } catch {}

@@ -16,6 +16,32 @@ export default function AdminPoojaPage() {
   const router = useRouter();
   const { show } = useAlert();
 
+  const canDownload = (() => {
+    try {
+      if (!poojaDate) return true;
+      if (poojaSession === "all") return true;
+      const today = new Date();
+      const [y, m, d] = poojaDate.split("-").map((v) => parseInt(v, 10));
+      if (!y || !m || !d) return true;
+      const target = new Date(y, m - 1, d, 0, 0, 0, 0);
+      const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      if (target < todayMid) return true; // past dates: always allow
+      if (target > todayMid) return false; // future: disallow
+      // same day: enforce time thresholds
+      const threshold = new Date(target);
+      if (poojaSession === "10:30 AM") {
+        threshold.setHours(15, 0, 0, 0); // 3:00 PM
+      } else if (poojaSession === "6:30 PM") {
+        threshold.setHours(22, 0, 0, 0); // 10:00 PM
+      } else {
+        return true;
+      }
+      return today >= threshold;
+    } catch {
+      return true;
+    }
+  })();
+
   const load = async () => {
     setError(null);
     setLoading(true);
@@ -97,6 +123,7 @@ export default function AdminPoojaPage() {
         { key: "children_names", label: "Children", w: 200 },
         { key: "nakshatram", label: "Nakshatram", w: 110 },
         { key: "gothram", label: "Gothram", w: 100 },
+        { key: "attended_at", label: "Attended At", w: 130 },
       ],
       rows,
       `pooja-bookings${poojaDate ? `-${poojaDate}` : ""}`
@@ -110,6 +137,7 @@ export default function AdminPoojaPage() {
           <h1 className="text-2xl font-bold text-center">Pooja</h1>
           <div className="mt-2 flex justify-between">
             <button onClick={() => router.push("/admin")} className="rounded border px-3 py-1.5">Back</button>
+            <button onClick={() => router.push("/admin/pooja/scan")} className="rounded border px-3 py-1.5">QR Scanner</button>
           </div>
 
           <div className="rounded-xl border p-6 space-y-4 bg-card/70 mt-6">
@@ -129,13 +157,20 @@ export default function AdminPoojaPage() {
             </div>
             <div className="flex gap-3 pt-2 flex-wrap">
               <button onClick={load} disabled={loading} className="rounded bg-black text-white px-4 py-2">{loading ? "Loading…" : "Load Bookings"}</button>
-              <button onClick={downloadJSON} className="rounded border px-4 py-2">Download JSON</button>
-              <button onClick={downloadCSV} className="rounded border px-4 py-2">Download CSV</button>
-              <button onClick={downloadPDF} className="rounded border px-4 py-2">Download PDF</button>
+              <button onClick={downloadJSON} disabled={!canDownload} title={!canDownload ? "Available after 3 PM (10:30 AM) or 10 PM (6:30 PM) on selected day" : undefined} className="rounded border px-4 py-2 disabled:opacity-60">Download JSON</button>
+              <button onClick={downloadCSV} disabled={!canDownload} title={!canDownload ? "Available after 3 PM (10:30 AM) or 10 PM (6:30 PM) on selected day" : undefined} className="rounded border px-4 py-2 disabled:opacity-60">Download CSV</button>
+              <button onClick={downloadPDF} disabled={!canDownload} title={!canDownload ? "Available after 3 PM (10:30 AM) or 10 PM (6:30 PM) on selected day" : undefined} className="rounded border px-4 py-2 disabled:opacity-60">Download PDF</button>
             </div>
             {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
             {Array.isArray(rows) && (
               <div className="overflow-x-auto border rounded-lg">
+                <div className="p-3 text-sm text-muted-foreground">
+                  {(() => {
+                    const total = rows.length;
+                    const attended = rows.filter((r: any) => !!r.attended_at).length;
+                    return <span>Attended: <strong>{attended}</strong> / Total: <strong>{total}</strong></span>;
+                  })()}
+                </div>
                 <table className="min-w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
@@ -148,12 +183,13 @@ export default function AdminPoojaPage() {
                       <th className="px-3 py-2 text-left font-medium">Children</th>
                       <th className="px-3 py-2 text-left font-medium">Nakshatram</th>
                       <th className="px-3 py-2 text-left font-medium">Gothram</th>
+                      <th className="px-3 py-2 text-left font-medium">Attended</th>
                       <th className="px-3 py-2 text-left font-medium">Created</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.length === 0 ? (
-                      <tr><td className="px-3 py-3" colSpan={10}>No records.</td></tr>
+                      <tr><td className="px-3 py-3" colSpan={11}>No records.</td></tr>
                     ) : (
                       rows.map((r, i) => (
                         <tr key={i} className="border-t">
@@ -166,6 +202,7 @@ export default function AdminPoojaPage() {
                           <td className="px-3 py-2">{r.children_names}</td>
                           <td className="px-3 py-2">{r.nakshatram}</td>
                           <td className="px-3 py-2">{r.gothram}</td>
+                          <td className="px-3 py-2">{r.attended_at ? String(r.attended_at).slice(0,19).replace('T',' ') : "—"}</td>
                           <td className="px-3 py-2">{r.created_at?.slice(0, 19).replace('T', ' ')}</td>
                         </tr>
                       ))

@@ -17,7 +17,10 @@ create table if not exists public."Pooja-Bookings" (
   nakshatram text not null default '' check (length(btrim(nakshatram)) > 0),
   gothram text not null default '' check (length(btrim(gothram)) > 0),
   amount numeric null,
-  utr text null
+  utr text null,
+  -- QR and attendance
+  qr_token uuid not null default gen_random_uuid(),
+  attended_at timestamptz null
 );
 
 -- Enforce booking window at the database layer as well
@@ -86,6 +89,21 @@ begin
   -- utr (optional)
   begin
     alter table public."Pooja-Bookings" add column if not exists utr text;
+  exception when duplicate_column then null; end;
+
+  -- qr_token and attended_at
+  begin
+    alter table public."Pooja-Bookings" add column if not exists qr_token uuid;
+  exception when duplicate_column then null; end;
+  update public."Pooja-Bookings" set qr_token = gen_random_uuid() where qr_token is null;
+  begin
+    alter table public."Pooja-Bookings" alter column qr_token set not null;
+  exception when others then null; end;
+  begin
+    create unique index if not exists pooja_qr_token_idx on public."Pooja-Bookings"(qr_token);
+  exception when duplicate_table then null; end;
+  begin
+    alter table public."Pooja-Bookings" add column if not exists attended_at timestamptz;
   exception when duplicate_column then null; end;
 end $$;
 

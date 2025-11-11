@@ -46,7 +46,8 @@ returns table (
   spouse_name text,
   children_names text,
   nakshatram text,
-  gothram text
+  gothram text,
+  attended_at timestamptz
 ) as $$
 begin
   if not public.admin_can() then
@@ -54,7 +55,7 @@ begin
   end if;
   return query
     select b.id, b.created_at, b.date, b.session, b.user_id, b.name, b.email, b.phone,
-           b.spouse_name, b.children_names, b.nakshatram, b.gothram
+           b.spouse_name, b.children_names, b.nakshatram, b.gothram, b.attended_at
     from public."Pooja-Bookings" b
     where (start_date is null or b.date >= start_date)
       and (end_date is null or b.date <= end_date)

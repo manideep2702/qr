@@ -18,12 +18,13 @@ returns table (
   email text,
   phone text,
   qty integer,
-  status text
+  status text,
+  attended_at timestamptz
 ) as $$
 begin
   if not public.admin_can() then return; end if;
   return query
-    select b.id, b.created_at, b.date, b.session, b.user_id, b.name, b.email, b.phone, b.qty, b.status
+    select b.id, b.created_at, b.date, b.session, b.user_id, b.name, b.email, b.phone, b.qty, b.status, b.attended_at
     from public."Bookings" b
     where (start_date is null or b.date >= start_date)
       and (end_date is null or b.date <= end_date)

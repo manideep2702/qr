@@ -125,12 +125,13 @@ RETURNS TABLE (
   email text,
   phone text,
   qty integer,
-  status text
+  status text,
+  attended_at timestamptz
 ) AS $$
 BEGIN
   IF NOT public.admin_can() THEN RETURN; END IF;
   RETURN QUERY
-    SELECT b.id, b.created_at, b.date, b.session, b.user_id, b.name, b.email, b.phone, b.qty, b.status
+    SELECT b.id, b.created_at, b.date, b.session, b.user_id, b.name, b.email, b.phone, b.qty, b.status, b.attended_at
     FROM public."Bookings" b
     WHERE (start_date IS NULL OR b.date >= start_date)
       AND (end_date IS NULL OR b.date <= end_date)

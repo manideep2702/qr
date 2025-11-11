@@ -126,6 +126,182 @@ function isLastSession(label: string) {
   return label === "9:30 PM - 10:00 PM";
 }
 
+async function downloadAnnaPassPDF(booking: {
+  id: string;
+  qr_token?: string;
+  date: string;
+  session: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  qty: number;
+}) {
+  try {
+    const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([595, 842]); // A4
+    const { width, height } = page.getSize();
+    const margin = 36;
+    const contentW = width - margin * 2;
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+    // Colors
+    const brand = rgb(0.18, 0.12, 0.38);
+    const light = rgb(0.97, 0.97, 0.99);
+    const gray = rgb(0.4, 0.4, 0.48);
+    const border = rgb(0.8, 0.8, 0.88);
+
+    // Optional logo
+    let logoImg: any = null;
+    try {
+      const sitePref =
+        (process.env.NEXT_PUBLIC_SITE_URL as string) ||
+        (typeof window !== "undefined" ? (window.location.origin as string) : "");
+      const base = (sitePref || "").replace(/\/$/, "");
+      const logoUrl = `${base || ""}/logo.jpeg`;
+      const logoRes = await fetch(logoUrl);
+      const logoBuf = new Uint8Array(await logoRes.arrayBuffer());
+      try {
+        logoImg = await pdf.embedJpg(logoBuf);
+      } catch {
+        logoImg = await pdf.embedPng(logoBuf);
+      }
+    } catch {}
+
+    // Container
+    const cardX = margin;
+    const cardY = margin;
+    const cardW = contentW;
+    const cardH = height - margin * 2;
+    page.drawRectangle({ x: cardX, y: cardY, width: cardW, height: cardH, color: light, borderColor: border, borderWidth: 1.2, radius: 10 });
+
+    // Header
+    const headerH = 72;
+    page.drawRectangle({ x: cardX, y: height - margin - headerH, width: cardW, height: headerH, color: brand, radius: 10 });
+    let hx = cardX + 16;
+    const hy = height - margin - headerH + 16;
+    if (logoImg) {
+      page.drawImage(logoImg, { x: hx, y: hy + 6, width: 40, height: 40 });
+      hx += 52;
+    }
+    page.drawText("Sree Sabari Sastha Seva Samithi", { x: hx, y: hy + 28, size: 12, font, color: rgb(1, 1, 1) });
+    page.drawText("Annadanam Pass", { x: hx, y: hy + 8, size: 20, font: fontBold, color: rgb(1, 1, 1) });
+
+    // QR payload (URL)
+    const sitePref =
+      (process.env.NEXT_PUBLIC_SITE_URL as string) ||
+      (typeof window !== "undefined" ? (window.location.origin as string) : "");
+    const base = (sitePref || "").replace(/\/$/, "") || "https://example.com";
+    const payload = `${base}/anna?b=${encodeURIComponent(booking.id)}&t=${encodeURIComponent(booking.qr_token || "")}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=360x360&ecc=H&margin=0&data=${encodeURIComponent(payload)}`;
+    const qrRes = await fetch(qrUrl);
+    const qrBuf = new Uint8Array(await qrRes.arrayBuffer());
+    const qrImg = await pdf.embedPng(qrBuf);
+
+    // Table layout
+    const innerPad = 18;
+    const tableX = cardX + innerPad;
+    const tableY = height - margin - headerH - innerPad;
+    const tableW = cardW - innerPad * 2 - 220;
+    const baseRowH = 28;
+    const col1W = 140;
+    const col2W = tableW - col1W;
+
+    const rows: Array<{ k: string; v: string }> = [
+      { k: "Booking ID", v: String(booking.id) },
+      { k: "Name", v: booking.name },
+      { k: "Email", v: booking.email },
+      { k: "Phone", v: booking.phone || "-" },
+      { k: "Date", v: booking.date },
+      { k: "Session", v: booking.session },
+      { k: "Qty", v: String(booking.qty) },
+      { k: "Status", v: "Confirmed" },
+    ];
+    page.drawText("Pass Details", { x: tableX, y: tableY - 14, size: 12, font: fontBold, color: gray });
+    let cursorY = tableY - 24;
+    const wrap = (text: string, maxWidth: number) => {
+      const size = 11;
+      const words = (text ?? "").toString().split(/\s+/);
+      const lines: string[] = [];
+      let current = "";
+      for (const word of words) {
+        const candidate = current ? current + " " + word : word;
+        if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+          current = candidate;
+        } else {
+          if (current) lines.push(current);
+          // If the word itself is longer than the width, break it by characters
+          let remaining = word;
+          while (font.widthOfTextAtSize(remaining, size) > maxWidth) {
+            // start with an optimistic cut length
+            let cut = Math.max(1, Math.floor((maxWidth / Math.max(1, font.widthOfTextAtSize(remaining, size))) * remaining.length));
+            cut = Math.min(cut, remaining.length);
+            let slice = remaining.slice(0, cut);
+            // shrink slice until it fits
+            while (slice.length > 1 && font.widthOfTextAtSize(slice, size) > maxWidth) {
+              slice = slice.slice(0, -1);
+            }
+            lines.push(slice);
+            remaining = remaining.slice(slice.length);
+          }
+          current = remaining;
+        }
+      }
+      if (current) lines.push(current);
+      return lines.length ? lines : [""];
+    };
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const lines = wrap(r.v, col2W - 12);
+      const lineGap = 13;
+      const rowH = baseRowH + Math.max(0, (lines.length - 1) * lineGap);
+      const rowTop = cursorY;
+      if (i % 2 === 0) {
+        page.drawRectangle({ x: tableX, y: rowTop - rowH + 3, width: tableW, height: rowH, color: rgb(0.985, 0.985, 0.995) });
+      }
+      // Key
+      page.drawText(r.k, { x: tableX + 8, y: rowTop - 14, size: 11, font: fontBold, color: rgb(0, 0, 0) });
+      // Value lines
+      for (let li = 0; li < lines.length; li++) {
+        page.drawText(lines[li], { x: tableX + col1W + 8, y: rowTop - 14 - li * lineGap, size: 11, font, color: rgb(0.1, 0.1, 0.1) });
+      }
+      // Divider
+      page.drawLine({
+        start: { x: tableX, y: rowTop - rowH + 3 },
+        end: { x: tableX + tableW, y: rowTop - rowH + 3 },
+        thickness: 0.4,
+        color: border,
+      });
+      cursorY -= rowH;
+    }
+
+    // QR block
+    const qrX = cardX + cardW - innerPad - 200;
+    const qrY = tableY - 6;
+    page.drawText("Scan at Counter", { x: qrX, y: qrY, size: 12, font: fontBold, color: gray });
+    page.drawImage(qrImg, { x: qrX, y: qrY - 180 - 6, width: 180, height: 180 });
+    page.drawText("URL:", { x: qrX, y: qrY - 180 - 22, size: 9, font: fontBold, color: gray });
+    const shownUrl = payload.length > 36 ? payload.slice(0, 36) + "…" : payload;
+    page.drawText(shownUrl, { x: qrX + 24, y: qrY - 180 - 22, size: 9, font, color: gray });
+
+    // Footer
+    const note = "Please arrive 10 minutes early. Present this pass at the Annadanam counter. Swamiye Saranam Ayyappa.";
+    page.drawText(note, { x: cardX + innerPad, y: cardY + 18, size: 10, font, color: gray });
+
+    const bytes = await pdf.save();
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `annadanam-pass-${booking.date}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch {}
+}
+
 function isBookableNow(label: string, date: Date) {
   const t = computeSlotTimes(date, label);
   if (!t) return false;
@@ -133,9 +309,20 @@ function isBookableNow(label: string, date: Date) {
   const now = new Date();
   const utcMs = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
   const ist = new Date(utcMs + 5.5 * 60 * 60 * 1000);
-  const minutes = ist.getHours() * 60 + ist.getMinutes();
+  // Dev override: ?devTime=HH:MM (IST) to simulate window; for UI only
+  let minutes = ist.getHours() * 60 + ist.getMinutes();
+  try {
+    const sp = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const devTime = sp?.get("devTime");
+    if (devTime) {
+      const [hh, mm] = devTime.split(":").map((v) => parseInt(v, 10));
+      if (Number.isFinite(hh) && Number.isFinite(mm)) {
+        minutes = (hh % 24) * 60 + (mm % 60);
+      }
+    }
+  } catch {}
   const isAfternoon = AFTERNOON_SLOTS.some((a) => a.label === label);
-  const [startMin, endMin] = isAfternoon ? [5 * 60, 11 * 60 + 30] : [15 * 60, 19 * 60 + 30];
+  const [startMin, endMin] = isAfternoon ? [11 * 60, 11 * 60 + 30] : [15 * 60, 19 * 60 + 30];
   const withinWindow = minutes >= startMin && minutes <= endMin;
   if (!withinWindow) return false;
   // Close at session start (cannot book once session begins)
@@ -199,7 +386,7 @@ function SessionPicker({
       const groupRemaining = isAfternoon ? 150 - aftTotal : 150 - eveTotal;
       if (groupRemaining <= 0) infoText = "Session full";
       else infoText = isAfternoon
-        ? "Booking window: 5:00 AM–11:30 AM IST"
+        ? "Booking window: 11:00 AM–11:30 AM IST"
         : "Booking window: 3:00 PM–7:30 PM IST";
     }
     return (
@@ -466,16 +653,21 @@ export default function AnnadanamBooking() {
     }
     try {
       const supabase = await ensure();
-      // Block booking if Aadhaar/PAN not uploaded
+      // Block booking if Aadhaar/PAN not uploaded (skip for admins)
       try {
-        const ok = await hasIdentityDocument(supabase);
-        if (!ok) {
-          const next = window.location.pathname + window.location.search;
-          show({ title: "Identity document required", description: "Please upload Aadhaar or PAN in Profile → Edit. Redirecting in 5 seconds…", variant: "warning", durationMs: 5000 });
-          setTimeout(() => {
-            try { window.location.assign("/profile/edit/?next=" + encodeURIComponent(next)); } catch {}
-          }, 5000);
-          return;
+        const envRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
+        const adminEmails = envRaw.split(/[\s,;]+/).filter(Boolean);
+        const isAdmin = adminEmails.length > 0 && adminEmails.includes(String(user.email || "").toLowerCase());
+        if (!isAdmin) {
+          const ok = await hasIdentityDocument(supabase);
+          if (!ok) {
+            const next = window.location.pathname + window.location.search;
+            show({ title: "Identity document required", description: "Please upload Aadhaar or PAN in Profile → Edit. Redirecting in 5 seconds…", variant: "warning", durationMs: 5000 });
+            setTimeout(() => {
+              try { window.location.assign("/profile/edit/?next=" + encodeURIComponent(next)); } catch {}
+            }, 5000);
+            return;
+          }
         }
       } catch {}
       const { data: userRes } = await supabase.auth.getUser();
@@ -488,19 +680,71 @@ export default function AnnadanamBooking() {
         } catch {}
         return;
       }
-      // Prefer RPC if available
-      const { error: rpcErr } = await supabase.rpc("reserve_annadanam_by_date", {
-        d: selectedDateKey,
-        s: slot.session,
-        user_id: user.id,
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        qty,
-      });
-      if (rpcErr) throw rpcErr;
+      // Developer override path: ?devTime=HH:MM triggers server API using service role with time override
+      const devSp = new URLSearchParams(window.location.search);
+      const devTime = devSp.get("devTime") || "";
+      let usedDev = false;
+      let inserted: any = null;
+      if (devTime) {
+        // Verify admin email against allowed list
+        const envRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
+        const allowed = envRaw.split(/[\s,;]+/).filter(Boolean);
+        const emailLower = (user.email || "").toLowerCase();
+        if (allowed.length > 0 && allowed.includes(emailLower)) {
+          const { data: s } = await supabase.auth.getSession();
+          const token = s?.session?.access_token;
+          if (!token) throw new Error("Not authenticated");
+          const res = await fetch("/api/dev/annadanam/reserve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              d: selectedDateKey,
+              s: slot.session,
+              user_id: user.id,
+              name: data.name,
+              email: data.email,
+              phone: data.phone,
+              qty,
+              dev_time: devTime,
+            }),
+          });
+          const j = await res.json().catch(() => ({} as any));
+          if (!res.ok) throw new Error(j?.error || "Dev reserve failed");
+          inserted = j?.row || null;
+          usedDev = true;
+        }
+      }
+      if (!usedDev) {
+        // Normal RPC
+        const { data: d, error: rpcErr } = await supabase.rpc("reserve_annadanam_by_date", {
+          d: selectedDateKey,
+          s: slot.session,
+          user_id: user.id,
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          qty,
+        });
+        if (rpcErr) throw rpcErr;
+        inserted = d || null;
+      }
       // Email sending is handled by backend automations (if configured). No client call here on static hosting.
       show({ title: "Booking confirmed", description: `${slot.session} • ${selectedDateKey}`, variant: "success" });
+      // Best-effort pass PDF
+      try {
+        const id = String((inserted?.id) || "");
+        const token = String((inserted?.qr_token) || "");
+        await downloadAnnaPassPDF({
+          id,
+          qr_token: token,
+          date: selectedDateKey,
+          session: slot.session,
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          qty,
+        });
+      } catch {}
       // Best-effort confirmation email via Supabase Edge Function (SMTP)
       try {
         await sendEmail({
@@ -531,7 +775,7 @@ export default function AnnadanamBooking() {
     <div className="container mx-auto py-8 px-4 max-w-6xl">
       <div className="mb-8">
         <h2 className="text-2xl font-semibold">Annadanam Slot Booking</h2>
-        <p className="text-muted-foreground">Choose a time below. Booking windows (IST): Morning 5:00 AM–11:30 AM, Evening 3:00 PM – 7:30 PM.</p>
+        <p className="text-muted-foreground">Choose a time below. Booking windows (IST): Afternoon 11:00 AM–11:30 AM, Evening 3:00 PM – 7:30 PM.</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-3 mb-8">
         <div className="lg:col-span-1">

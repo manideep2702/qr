@@ -12,8 +12,11 @@ export type SendEmailOptions = {
 
 export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
   try {
-    // Prefer custom HTTP endpoint (e.g., your Webuzo Python API) if provided
-    const endpoint = process.env.NEXT_PUBLIC_EMAIL_ENDPOINT;
+    // Prefer custom HTTP endpoint (e.g., your Webuzo Python API).
+    // Fallback default: same-origin /api/send-email (works when hosting both on one domain).
+    const endpoint =
+      process.env.NEXT_PUBLIC_EMAIL_ENDPOINT ||
+      (typeof window !== "undefined" ? `${window.location.origin}/api/send-email` : undefined);
     if (endpoint) {
       const r = await fetch(endpoint, {
         method: "POST",

@@ -55,16 +55,21 @@ export default function VolunteerPage() {
         const supabase = getSupabaseBrowserClient();
         const { data: userRes } = await supabase.auth.getUser();
         user_id = userRes?.user?.id;
-        // Require Aadhaar/PAN before booking volunteer slot as well
+        // Require Aadhaar/PAN before booking volunteer slot (skip for admins)
         try {
-          const ok = await hasIdentityDocument(supabase as any);
-          if (!ok) {
-            const next = window.location.pathname + window.location.search;
-            show({ title: "Identity document required", description: "Please upload Aadhaar or PAN in your profile. Redirecting in 5 seconds…", variant: "warning", durationMs: 5000 });
-            setTimeout(() => {
-              try { window.location.assign("/profile/edit/?next=" + encodeURIComponent(next)); } catch {}
-            }, 5000);
-            return;
+          const envRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
+          const adminEmails = envRaw.split(/[\s,;]+/).filter(Boolean);
+          const isAdmin = adminEmails.length > 0 && adminEmails.includes(String(userRes?.user?.email || "").toLowerCase());
+          if (!isAdmin) {
+            const ok = await hasIdentityDocument(supabase as any);
+            if (!ok) {
+              const next = window.location.pathname + window.location.search;
+              show({ title: "Identity document required", description: "Please upload Aadhaar or PAN in your profile. Redirecting in 5 seconds…", variant: "warning", durationMs: 5000 });
+              setTimeout(() => {
+                try { window.location.assign("/profile/edit/?next=" + encodeURIComponent(next)); } catch {}
+              }, 5000);
+              return;
+            }
           }
         } catch {}
       }

@@ -132,6 +132,72 @@ export default function PoojaBookingPage() {
     prevSessionRef.current = next;
   }, [session]);
 
+  async function downloadPoojaPassPDF(booking: {
+    id: string;
+    qr_token?: string;
+    date: string;
+    session: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+    spouse_name?: string | null;
+    children_names?: string | null;
+    nakshatram?: string | null;
+    gothram?: string | null;
+  }) {
+    try {
+      const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
+      const pdf = await PDFDocument.create();
+      const page = pdf.addPage();
+      const { width, height } = page.getSize();
+      const margin = 40;
+      const usable = width - margin * 2;
+      const font = await pdf.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+      const title = "Pooja Pass";
+      page.drawText(title, { x: margin, y: height - margin - 18, size: 18, font: fontBold, color: rgb(0, 0, 0) });
+      let y = height - margin - 36;
+
+      const label = (k: string, v?: string | null) => {
+        const txt = `${k}: ${v ?? "-"}`;
+        page.drawText(txt, { x: margin, y, size: 11, font, color: rgb(0, 0, 0) });
+        y -= 16;
+      };
+      label("Name", booking.name);
+      label("Email", booking.email);
+      if (booking.phone) label("Phone", booking.phone);
+      label("Date", booking.date);
+      label("Session", booking.session);
+      if (booking.spouse_name) label("Spouse", booking.spouse_name);
+      if (booking.children_names) label("Children", booking.children_names);
+      if (booking.nakshatram) label("Nakshatram", booking.nakshatram);
+      if (booking.gothram) label("Gothram", booking.gothram);
+
+      // QR payload and image
+      const payload = `POOJA:${booking.id}:${booking.qr_token || ""}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(payload)}`;
+      const imgRes = await fetch(qrUrl);
+      const imgBuf = new Uint8Array(await imgRes.arrayBuffer());
+      const qrImg = await pdf.embedPng(imgBuf);
+      const qrSize = Math.min(usable, 220);
+      page.drawImage(qrImg, { x: margin, y: Math.max(margin, y - qrSize - 10), width: qrSize, height: qrSize });
+
+      const bytes = await pdf.save();
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pooja-pass-${booking.date}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      // Non-blocking
+    }
+  }
+
   const book = async () => {
     try {
       const amountNumber = Number(amount);
@@ -152,17 +218,22 @@ export default function PoojaBookingPage() {
       }
       setSubmitting(true);
       const supabase = getSupabaseBrowserClient();
-      // Require Aadhaar/PAN before booking
+      // Require Aadhaar/PAN before booking (skip for admins)
       try {
-        const ok = await hasIdentityDocument(supabase as any);
-        if (!ok) {
-          const next = window.location.pathname + window.location.search;
-          show({ title: "Identity document required", description: "Please upload Aadhaar or PAN in your profile. Redirecting in 5 seconds…", variant: "warning", durationMs: 5000 });
-          setTimeout(() => {
-            try { window.location.assign("/profile/edit/?next=" + encodeURIComponent(next)); } catch {}
-          }, 5000);
-          setSubmitting(false);
-          return;
+        const envRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
+        const adminEmails = envRaw.split(/[\s,;]+/).filter(Boolean);
+        const isAdmin = adminEmails.length > 0 && adminEmails.includes(String(user.email || "").toLowerCase());
+        if (!isAdmin) {
+          const ok = await hasIdentityDocument(supabase as any);
+          if (!ok) {
+            const next = window.location.pathname + window.location.search;
+            show({ title: "Identity document required", description: "Please upload Aadhaar or PAN in your profile. Redirecting in 5 seconds…", variant: "warning", durationMs: 5000 });
+            setTimeout(() => {
+              try { window.location.assign("/profile/edit/?next=" + encodeURIComponent(next)); } catch {}
+            }, 5000);
+            setSubmitting(false);
+            return;
+          }
         }
       } catch {}
       const { data: userRes } = await supabase.auth.getUser();
@@ -185,12 +256,28 @@ export default function PoojaBookingPage() {
         utr: utr.trim(),
         user_id: user.id,
       } as const;
-      const { error } = await supabase.from("Pooja-Bookings").insert(payload);
-      if (error) {
-        show({ title: "Booking failed", description: error.message, variant: "error" });
+      const { data: inserted, error } = await supabase.from("Pooja-Bookings").insert(payload).select("*").single();
+      if (error || !inserted) {
+        show({ title: "Booking failed", description: error?.message || "Could not save booking", variant: "error" });
         return;
       }
       show({ title: "Pooja booked", description: `${dateIso} • ${session}`, variant: "success" });
+      // Immediate QR pass download (best-effort)
+      try {
+        await downloadPoojaPassPDF({
+          id: String(inserted.id),
+          qr_token: String((inserted as any).qr_token || ""),
+          date: dateIso,
+          session,
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          spouse_name: spouseName.trim(),
+          children_names: (childrenNames.trim() || null) as string | null,
+          nakshatram: nakshatram.trim(),
+          gothram: gothram.trim(),
+        });
+      } catch {}
       // Best-effort confirmation email
       try {
         await sendEmail({
