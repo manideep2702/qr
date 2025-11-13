@@ -41,19 +41,19 @@ export default function AdminDataDropdown() {
 
   if (!show) return null;
   return (
-    <div className="flex items-center px-2">
+    <div className="flex items-center px-2" suppressHydrationWarning>
       <SabarimalaDropdown
         className="relative cursor-pointer text-sm font-semibold px-6 py-2 rounded-full transition-colors bg-white/10 text-white hover:bg-white/20"
         options={[
           { label: "Annadanam List", onClick: () => router.push("/admin/annadanam") },
           { label: "Annadanam Scanner", onClick: () => router.push("/admin/annadanam/scan") },
+          { label: "Annadanam Attendees", onClick: () => router.push("/admin/annadanam/attendees") },
           { label: "Pooja List", onClick: () => router.push("/admin/pooja") },
-          { label: "QR Scanner", onClick: () => router.push("/admin/pooja/scan") },
           { label: "Volunteer List", onClick: () => router.push("/admin/volunteers") },
           { label: "Block Pooja Dates", onClick: () => router.push("/admin/pooja/block") },
         ]}
       >
-        Admin
+        <span suppressHydrationWarning>Admin</span>
       </SabarimalaDropdown>
     </div>
   );

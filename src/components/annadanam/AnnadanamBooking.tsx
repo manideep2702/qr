@@ -305,12 +305,21 @@ async function downloadAnnaPassPDF(booking: {
 function isBookableNow(label: string, date: Date) {
   const t = computeSlotTimes(date, label);
   if (!t) return false;
-  // Compute current time in IST regardless of user's local timezone
+  // Booking policy:
+  // - Same-day booking only (no advance bookings)
+  // - Afternoon window: 5:00 AM – 11:30 AM IST
+  // - Evening window:   3:00 PM – 7:30 PM IST
+  // - Close at session start
   const now = new Date();
+  const todayKey = formatDate(now);
+  const dateKey = formatDate(date);
+  if (dateKey !== todayKey) return false;  // only allow booking for today
+
+  // Compute current time in IST regardless of user's local timezone
   const utcMs = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
   const ist = new Date(utcMs + 5.5 * 60 * 60 * 1000);
-  // Dev override: ?devTime=HH:MM (IST) to simulate window; for UI only
   let minutes = ist.getHours() * 60 + ist.getMinutes();
+  // Dev override: ?devTime=HH:MM (IST) to simulate "now" for testing
   try {
     const sp = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
     const devTime = sp?.get("devTime");
@@ -322,12 +331,11 @@ function isBookableNow(label: string, date: Date) {
     }
   } catch {}
   const isAfternoon = AFTERNOON_SLOTS.some((a) => a.label === label);
-  const [startMin, endMin] = isAfternoon ? [11 * 60, 11 * 60 + 30] : [15 * 60, 19 * 60 + 30];
+  const [startMin, endMin] = isAfternoon ? [5 * 60, 11 * 60 + 30] : [15 * 60, 19 * 60 + 30];
   const withinWindow = minutes >= startMin && minutes <= endMin;
   if (!withinWindow) return false;
-  // Close at session start (cannot book once session begins)
-  if (now >= t.start) return false;
-  return true;
+  // Close at session start
+  return now < t.start;
 }
 
 function SessionPicker({
@@ -653,6 +661,17 @@ export default function AnnadanamBooking() {
     }
     try {
       const supabase = await ensure();
+      // Fetch user early for admin checks
+      const { data: userRes } = await supabase.auth.getUser();
+      const user = userRes?.user;
+      if (!user) {
+        show({ title: "Sign in required", description: "Please sign in to book.", variant: "warning" });
+        try {
+          const next = `${window.location.pathname}${window.location.search}`;
+          window.location.assign(`/sign-in/?next=${encodeURIComponent(next)}`);
+        } catch {}
+        return;
+      }
       // Block booking if Aadhaar/PAN not uploaded (skip for admins)
       try {
         const envRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
@@ -670,16 +689,6 @@ export default function AnnadanamBooking() {
           }
         }
       } catch {}
-      const { data: userRes } = await supabase.auth.getUser();
-      const user = userRes?.user;
-      if (!user) {
-        show({ title: "Sign in required", description: "Please sign in to book.", variant: "warning" });
-        try {
-          const next = `${window.location.pathname}${window.location.search}`;
-          window.location.assign(`/sign-in/?next=${encodeURIComponent(next)}`);
-        } catch {}
-        return;
-      }
       // Developer override path: ?devTime=HH:MM triggers server API using service role with time override
       const devSp = new URLSearchParams(window.location.search);
       const devTime = devSp.get("devTime") || "";
@@ -691,26 +700,19 @@ export default function AnnadanamBooking() {
         const allowed = envRaw.split(/[\s,;]+/).filter(Boolean);
         const emailLower = (user.email || "").toLowerCase();
         if (allowed.length > 0 && allowed.includes(emailLower)) {
-          const { data: s } = await supabase.auth.getSession();
-          const token = s?.session?.access_token;
-          if (!token) throw new Error("Not authenticated");
-          const res = await fetch("/api/dev/annadanam/reserve", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              d: selectedDateKey,
-              s: slot.session,
-              user_id: user.id,
-              name: data.name,
-              email: data.email,
-              phone: data.phone,
-              qty,
-              dev_time: devTime,
-            }),
+          // DEV: call admin-only RPC that bypasses time gating (static-export friendly)
+          const { data: devRow, error: devErr } = await supabase.rpc("dev_insert_annadanam_booking", {
+            d: selectedDateKey,
+            s: slot.session,
+            p_user_id: user.id,
+            p_name: data.name,
+            p_email: data.email,
+            p_phone: data.phone,
+            p_qty: qty,
+            dev_time: devTime,
           });
-          const j = await res.json().catch(() => ({} as any));
-          if (!res.ok) throw new Error(j?.error || "Dev reserve failed");
-          inserted = j?.row || null;
+          if (devErr) throw new Error(devErr.message || "Dev reserve failed");
+          inserted = Array.isArray(devRow) ? (devRow[0] ?? null) : (devRow ?? null);
           usedDev = true;
         }
       }
@@ -775,7 +777,7 @@ export default function AnnadanamBooking() {
     <div className="container mx-auto py-8 px-4 max-w-6xl">
       <div className="mb-8">
         <h2 className="text-2xl font-semibold">Annadanam Slot Booking</h2>
-        <p className="text-muted-foreground">Choose a time below. Booking windows (IST): Afternoon 11:00 AM–11:30 AM, Evening 3:00 PM – 7:30 PM.</p>
+        <p className="text-muted-foreground">Choose a time below. Booking windows (IST): Afternoon 5:00 AM–11:30 AM, Evening 3:00 PM–7:30 PM.</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-3 mb-8">
         <div className="lg:col-span-1">

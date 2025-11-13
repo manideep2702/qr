@@ -37,29 +37,44 @@ export default function AdminAnnaScanPage() {
 
   useEffect(() => {
     let stream: MediaStream | null = null;
+    let mounted = true;
 
     async function startCamera() {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" }
         });
+        
+        if (!mounted) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+        
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.play();
+          // Use play() with catch to handle interruptions
+          videoRef.current.play().catch(err => {
+            // Ignore AbortError when component unmounts or video is interrupted
+            if (err.name !== 'AbortError') {
+              console.error('Video play error:', err);
+            }
+          });
         }
         startScanning();
-      } catch (err) {
-        show({ 
-          title: "Camera Error", 
-          description: "Could not access camera. Please allow camera permissions.", 
-          variant: "error" 
-        });
+      } catch (err: any) {
+        if (mounted) {
+          show({ 
+            title: "Camera Error", 
+            description: "Could not access camera. Please allow camera permissions.", 
+            variant: "error" 
+          });
+        }
       }
     }
 
     function startScanning() {
       scanIntervalRef.current = setInterval(async () => {
-        if (!scanning || !videoRef.current || !canvasRef.current) return;
+        if (!mounted || !scanning || !videoRef.current || !canvasRef.current) return;
         
         const video = videoRef.current;
         const canvas = canvasRef.current;
@@ -81,7 +96,7 @@ export default function AdminAnnaScanPage() {
                 await handleScannedCode(code.data);
               }
             } catch (err) {
-              console.error("QR scan error:", err);
+              // Silently ignore scan errors
             }
           }
         }
@@ -91,11 +106,27 @@ export default function AdminAnnaScanPage() {
     // Load jsQR library
     const script = document.createElement("script");
     script.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js";
-    script.onload = () => startCamera();
+    script.onload = () => {
+      if (mounted) startCamera();
+    };
+    script.onerror = () => {
+      if (mounted) {
+        show({ 
+          title: "Library Error", 
+          description: "Failed to load QR scanner library", 
+          variant: "error" 
+        });
+      }
+    };
     document.head.appendChild(script);
 
     return () => {
+      mounted = false;
       if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.srcObject = null;
+      }
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }

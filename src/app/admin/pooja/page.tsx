@@ -132,86 +132,181 @@ export default function AdminPoojaPage() {
 
   return (
     <AdminGuard>
-      <main className="min-h-screen p-6 md:p-10">
-        <div className="mx-auto max-w-3xl">
-          <h1 className="text-2xl font-bold text-center">Pooja</h1>
-          <div className="mt-2 flex justify-between">
-            <button onClick={() => router.push("/admin")} className="rounded border px-3 py-1.5">Back</button>
-            <button onClick={() => router.push("/admin/pooja/scan")} className="rounded border px-3 py-1.5">QR Scanner</button>
+      <main className="min-h-screen bg-black p-6 md:p-10">
+        <div className="mx-auto max-w-7xl">
+          {/* Header */}
+          <div className="flex items-start justify-between mb-8">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
+                Pooja Bookings
+              </h1>
+              <p className="text-gray-400">
+                View and manage pooja reservations
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => router.push("/admin")} 
+                className="px-5 py-2.5 text-sm font-medium text-gray-300 bg-gray-900 border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                ← Back
+              </button>
+              <button 
+                onClick={() => router.push("/admin/pooja/scan")} 
+                className="px-5 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                QR Scanner
+              </button>
+            </div>
           </div>
 
-          <div className="rounded-xl border p-6 space-y-4 bg-card/70 mt-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-sm" htmlFor="poojaDate">Date</label>
-                <input id="poojaDate" type="date" className="w-full rounded border px-3 py-2 bg-background" value={poojaDate} onChange={(e)=>setPoojaDate(e.target.value)} />
+          {/* Filters Section */}
+          <div className="bg-gray-900 rounded-xl shadow-sm border border-gray-700 p-6 mb-8">
+            <h2 className="text-xl font-semibold text-white mb-6">Filters</h2>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="poojaDate">
+                  Date
+                </label>
+                <input 
+                  id="poojaDate" 
+                  type="date" 
+                  className="w-full rounded-lg border border-gray-600 px-4 py-2.5 bg-gray-800 text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-900 transition-colors outline-none" 
+                  value={poojaDate} 
+                  onChange={(e)=>setPoojaDate(e.target.value)} 
+                />
               </div>
-              <div className="space-y-1">
-                <label className="text-sm" htmlFor="poojaSession">Timing</label>
-                <select id="poojaSession" className="w-full rounded border px-3 py-2 bg-background" value={poojaSession} onChange={(e)=>setPoojaSession(e.target.value)}>
-                  <option value="all">All Timings</option>
-                  <option value="10:30 AM">10:30 AM</option>
-                  <option value="6:30 PM">6:30 PM</option>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="poojaSession">
+                  Session
+                </label>
+                <select 
+                  id="poojaSession" 
+                  className="w-full rounded-lg border border-gray-600 px-4 py-2.5 bg-gray-800 text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-900 transition-colors outline-none" 
+                  value={poojaSession} 
+                  onChange={(e)=>setPoojaSession(e.target.value)}
+                >
+                  <option value="all">All Sessions</option>
+                  <option value="10:30 AM">Morning — 10:30 AM</option>
+                  <option value="6:30 PM">Evening — 6:30 PM</option>
                 </select>
               </div>
             </div>
-            <div className="flex gap-3 pt-2 flex-wrap">
-              <button onClick={load} disabled={loading} className="rounded bg-black text-white px-4 py-2">{loading ? "Loading…" : "Load Bookings"}</button>
-              <button onClick={downloadJSON} disabled={!canDownload} title={!canDownload ? "Available after 3 PM (10:30 AM) or 10 PM (6:30 PM) on selected day" : undefined} className="rounded border px-4 py-2 disabled:opacity-60">Download JSON</button>
-              <button onClick={downloadCSV} disabled={!canDownload} title={!canDownload ? "Available after 3 PM (10:30 AM) or 10 PM (6:30 PM) on selected day" : undefined} className="rounded border px-4 py-2 disabled:opacity-60">Download CSV</button>
-              <button onClick={downloadPDF} disabled={!canDownload} title={!canDownload ? "Available after 3 PM (10:30 AM) or 10 PM (6:30 PM) on selected day" : undefined} className="rounded border px-4 py-2 disabled:opacity-60">Download PDF</button>
+            
+            <div className="flex gap-3 flex-wrap">
+              <button 
+                onClick={load} 
+                disabled={loading} 
+                className="px-6 py-2.5 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? "Loading..." : "Load Data"}
+              </button>
+              <button 
+                onClick={downloadJSON} 
+                disabled={!canDownload} 
+                title={!canDownload ? "Available after 3 PM (10:30 AM) or 10 PM (6:30 PM) on selected day" : undefined} 
+                className="px-4 py-2.5 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Export JSON
+              </button>
+              <button 
+                onClick={downloadCSV} 
+                disabled={!canDownload} 
+                title={!canDownload ? "Available after 3 PM (10:30 AM) or 10 PM (6:30 PM) on selected day" : undefined} 
+                className="px-4 py-2.5 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Export CSV
+              </button>
+              <button 
+                onClick={downloadPDF} 
+                disabled={!canDownload} 
+                title={!canDownload ? "Available after 3 PM (10:30 AM) or 10 PM (6:30 PM) on selected day" : undefined} 
+                className="px-4 py-2.5 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Export PDF
+              </button>
             </div>
-            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
-            {Array.isArray(rows) && (
-              <div className="overflow-x-auto border rounded-lg">
-                <div className="p-3 text-sm text-muted-foreground">
-                  {(() => {
-                    const total = rows.length;
-                    const attended = rows.filter((r: any) => !!r.attended_at).length;
-                    return <span>Attended: <strong>{attended}</strong> / Total: <strong>{total}</strong></span>;
-                  })()}
-                </div>
-                <table className="min-w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium">Date</th>
-                      <th className="px-3 py-2 text-left font-medium">Session</th>
-                      <th className="px-3 py-2 text-left font-medium">Name</th>
-                      <th className="px-3 py-2 text-left font-medium">Email</th>
-                      <th className="px-3 py-2 text-left font-medium">Phone</th>
-                      <th className="px-3 py-2 text-left font-medium">Spouse</th>
-                      <th className="px-3 py-2 text-left font-medium">Children</th>
-                      <th className="px-3 py-2 text-left font-medium">Nakshatram</th>
-                      <th className="px-3 py-2 text-left font-medium">Gothram</th>
-                      <th className="px-3 py-2 text-left font-medium">Attended</th>
-                      <th className="px-3 py-2 text-left font-medium">Created</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.length === 0 ? (
-                      <tr><td className="px-3 py-3" colSpan={11}>No records.</td></tr>
-                    ) : (
-                      rows.map((r, i) => (
-                        <tr key={i} className="border-t">
-                          <td className="px-3 py-2">{r.date}</td>
-                          <td className="px-3 py-2">{r.session}</td>
-                          <td className="px-3 py-2">{r.name}</td>
-                          <td className="px-3 py-2">{r.email}</td>
-                          <td className="px-3 py-2">{r.phone}</td>
-                          <td className="px-3 py-2">{r.spouse_name}</td>
-                          <td className="px-3 py-2">{r.children_names}</td>
-                          <td className="px-3 py-2">{r.nakshatram}</td>
-                          <td className="px-3 py-2">{r.gothram}</td>
-                          <td className="px-3 py-2">{r.attended_at ? String(r.attended_at).slice(0,19).replace('T',' ') : "—"}</td>
-                          <td className="px-3 py-2">{r.created_at?.slice(0, 19).replace('T', ' ')}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+            
+            {error && (
+              <div className="mt-4 p-3 bg-red-900/30 border border-red-800 rounded-lg">
+                <p className="text-sm text-red-300">{error}</p>
               </div>
             )}
           </div>
+
+          {/* Results */}
+          {Array.isArray(rows) && (
+            <div className="bg-gray-900 rounded-xl shadow-sm border border-gray-700 overflow-hidden">
+              <div className="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    Bookings List
+                  </h2>
+                  <p className="text-sm text-gray-400 mt-1">
+                    {(() => {
+                      const total = rows.length;
+                      const attended = rows.filter((r: any) => !!r.attended_at).length;
+                      return `Attended: ${attended} / Total: ${total}`;
+                    })()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                {rows.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 text-4xl">
+                      📭
+                    </div>
+                    <p className="text-lg font-medium text-white mb-1">No Bookings Found</p>
+                    <p className="text-sm text-gray-400">Try adjusting your filters</p>
+                  </div>
+                ) : (
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-800 border-b border-gray-700">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Session</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Email</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Phone</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Spouse</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Children</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Nakshatram</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Gothram</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">Attended</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Created</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700 bg-gray-900">
+                      {rows.map((r, i) => (
+                        <tr key={i} className="hover:bg-gray-800 transition-colors">
+                          <td className="px-4 py-3 whitespace-nowrap text-white font-medium">{r.date}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-300">{r.session}</td>
+                          <td className="px-4 py-3 text-white font-medium">{r.name}</td>
+                          <td className="px-4 py-3 text-gray-400">{r.email}</td>
+                          <td className="px-4 py-3 text-gray-400">{r.phone}</td>
+                          <td className="px-4 py-3 text-gray-400">{r.spouse_name || "—"}</td>
+                          <td className="px-4 py-3 text-gray-400">{r.children_names || "—"}</td>
+                          <td className="px-4 py-3 text-gray-400">{r.nakshatram || "—"}</td>
+                          <td className="px-4 py-3 text-gray-400">{r.gothram || "—"}</td>
+                          <td className="px-4 py-3 text-center">
+                            {r.attended_at ? (
+                              <span className="inline-flex items-center justify-center w-8 h-8 bg-green-900/30 text-green-400 rounded-full font-bold">✓</span>
+                            ) : (
+                              <span className="text-gray-600">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-500 text-xs">{r.created_at?.slice(0, 19).replace('T', ' ')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </AdminGuard>
